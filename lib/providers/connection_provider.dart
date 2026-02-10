@@ -1,5 +1,5 @@
 /// 连接状态管理
-/// 
+///
 /// 管理 WebSocket 连接状态和生命周期
 library;
 
@@ -20,8 +20,8 @@ class ConnectionNotifier extends StateNotifier<ConnectionState> {
   final Ref _ref;
   StreamSubscription? _stateSubscription;
 
-  ConnectionNotifier(this._wsService, this._ref) 
-      : super(const ConnectionState()) {
+  ConnectionNotifier(this._wsService, this._ref)
+      : super(ConnectionState.initial()) {
     _init();
   }
 
@@ -53,7 +53,8 @@ class ConnectionNotifier extends StateNotifier<ConnectionState> {
     final config = configState.config!;
 
     // 验证配置
-    final validation = _ref.read(configProvider.notifier).validateConfig(config);
+    final validation =
+        _ref.read(configProvider.notifier).validateConfig(config);
     if (!validation.isValid) {
       state = state.copyWith(
         status: ConnectionStatus.disconnected,
@@ -69,10 +70,7 @@ class ConnectionNotifier extends StateNotifier<ConnectionState> {
     );
 
     try {
-      await _wsService.connect(
-        url: config.gatewayUrl,
-        password: config.password,
-      );
+      await _wsService.connect(config);
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -124,7 +122,8 @@ class ConnectionNotifier extends StateNotifier<ConnectionState> {
 }
 
 /// 连接 Provider
-final connectionProvider = StateNotifierProvider<ConnectionNotifier, ConnectionState>((ref) {
+final connectionProvider =
+    StateNotifierProvider<ConnectionNotifier, ConnectionState>((ref) {
   final wsService = ref.watch(webSocketServiceProvider);
   return ConnectionNotifier(wsService, ref);
 });
@@ -133,16 +132,16 @@ final connectionProvider = StateNotifierProvider<ConnectionNotifier, ConnectionS
 extension ConnectionProviderExtension on WidgetRef {
   /// 是否已连接
   bool get isConnected => read(connectionProvider).isConnected;
-  
+
   /// 是否正在连接
   bool get isConnecting => read(connectionProvider).isConnecting;
-  
+
   /// 是否已断开
   bool get isDisconnected => read(connectionProvider).isDisconnected;
-  
+
   /// 连接状态
   ConnectionStatus get connectionStatus => read(connectionProvider).status;
-  
+
   /// 连接错误
   String? get connectionError => read(connectionProvider).error;
 }

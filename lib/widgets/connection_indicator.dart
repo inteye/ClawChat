@@ -1,5 +1,5 @@
 /// 连接状态指示器组件
-/// 
+///
 /// 显示当前连接状态的小部件
 library;
 
@@ -17,7 +17,7 @@ class ConnectionIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -31,7 +31,7 @@ class ConnectionIndicator extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        
+
         // 状态文本
         Text(
           _getStatusText(),
@@ -47,6 +47,7 @@ class ConnectionIndicator extends StatelessWidget {
   Color _getStatusColor(ThemeData theme) {
     switch (status) {
       case ConnectionStatus.connected:
+      case ConnectionStatus.authenticated:
         return Colors.green;
       case ConnectionStatus.connecting:
         return Colors.orange;
@@ -54,6 +55,10 @@ class ConnectionIndicator extends StatelessWidget {
         return Colors.red;
       case ConnectionStatus.reconnecting:
         return Colors.amber;
+      case ConnectionStatus.authenticating:
+        return Colors.blue;
+      case ConnectionStatus.error:
+        return Colors.red;
     }
   }
 
@@ -61,6 +66,7 @@ class ConnectionIndicator extends StatelessWidget {
   String _getStatusText() {
     switch (status) {
       case ConnectionStatus.connected:
+      case ConnectionStatus.authenticated:
         return '已连接';
       case ConnectionStatus.connecting:
         return '连接中...';
@@ -68,6 +74,10 @@ class ConnectionIndicator extends StatelessWidget {
         return '未连接';
       case ConnectionStatus.reconnecting:
         return '重连中...';
+      case ConnectionStatus.authenticating:
+        return '认证中...';
+      case ConnectionStatus.error:
+        return '连接错误';
     }
   }
 }

@@ -1,5 +1,5 @@
 /// 消息状态管理
-/// 
+///
 /// 管理聊天消息的发送、接收和存储
 library;
 
@@ -42,7 +42,9 @@ class MessagesState {
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      streamingMessage: clearStreamingMessage ? null : (streamingMessage ?? this.streamingMessage),
+      streamingMessage: clearStreamingMessage
+          ? null
+          : (streamingMessage ?? this.streamingMessage),
     );
   }
 
@@ -55,11 +57,11 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   final WebSocketService _wsService;
   final StorageService _storage;
   final Ref _ref;
-  
+
   StreamSubscription? _messageSubscription;
   final Map<String, StreamingAccumulator> _accumulators = {};
 
-  MessagesNotifier(this._wsService, this._storage, this._ref) 
+  MessagesNotifier(this._wsService, this._storage, this._ref)
       : super(const MessagesState()) {
     _init();
   }
@@ -102,7 +104,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void _handleIncomingMessage(Map<String, dynamic> data) {
     try {
       final parsed = ProtocolParser.parseMessage(data);
-      
+
       if (parsed.isStreamChunk) {
         _handleStreamChunk(parsed);
       } else if (parsed.isComplete) {
@@ -116,15 +118,15 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   /// 处理流式消息块
   void _handleStreamChunk(ParsedMessage parsed) {
     final messageId = parsed.messageId ?? 'unknown';
-    
+
     // 获取或创建累加器
     if (!_accumulators.containsKey(messageId)) {
-      _accumulators[messageId] = StreamingAccumulator();
+      _accumulators[messageId] = StreamingAccumulator(messageId);
     }
-    
+
     final accumulator = _accumulators[messageId]!;
     accumulator.addChunk(parsed.content ?? '');
-    
+
     // 更新流式消息状态
     final streamingMessage = Message(
       id: messageId,
@@ -133,21 +135,22 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
     );
-    
+
     state = state.copyWith(streamingMessage: streamingMessage);
   }
 
   /// 处理完整消息
   void _handleCompleteMessage(ParsedMessage parsed) {
-    final messageId = parsed.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
-    
+    final messageId =
+        parsed.messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
+
     // 如果有累加器，使用累加的内容
     String content = parsed.content ?? '';
     if (_accumulators.containsKey(messageId)) {
       content = _accumulators[messageId]!.fullContent;
       _accumulators.remove(messageId);
     }
-    
+
     final message = Message(
       id: messageId,
       content: content,
@@ -155,10 +158,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       timestamp: DateTime.now(),
       status: MessageStatus.sent,
     );
-    
+
     // 添加到消息列表
     _addMessage(message);
-    
+
     // 清除流式消息状态
     state = state.copyWith(clearStreamingMessage: true);
   }
@@ -174,7 +177,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
     // 获取配置
     final config = _ref.read(configProvider).config;
-    
+
     // 创建用户消息
     final userMessage = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -183,22 +186,17 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
     );
-    
+
     // 添加到列表
     _addMessage(userMessage);
 
     try {
-      // 发送消息
-      final payload = ProtocolParser.createMessagePayload(
-        content: content,
-        agentId: config?.agentId,
-      );
-      
-      _wsService.send(payload);
-      
+      // 使用官方的 chat.send 方法发送消息
+      await _wsService.sendUserMessage(content, agentId: config?.agentId);
+
       // 更新消息状态为已发送
       _updateMessageStatus(userMessage.id, MessageStatus.sent);
-      
+
       return true;
     } catch (e) {
       // 更新消息状态为失败
@@ -214,14 +212,14 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       (m) => m.id == messageId,
       orElse: () => throw Exception('消息不存在'),
     );
-    
+
     if (message.status != MessageStatus.failed) {
       return false;
     }
-    
+
     // 更新状态为发送中
     _updateMessageStatus(messageId, MessageStatus.sending);
-    
+
     // 重新发送
     return await sendMessage(message.content);
   }
@@ -230,7 +228,7 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
   void _addMessage(Message message) {
     final updatedMessages = [...state.messages, message];
     state = state.copyWith(messages: updatedMessages);
-    
+
     // 保存到本地
     _storage.saveMessage(message);
   }
@@ -243,9 +241,9 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       }
       return m;
     }).toList();
-    
+
     state = state.copyWith(messages: updatedMessages);
-    
+
     // 更新本地存储
     final message = updatedMessages.firstWhere((m) => m.id == messageId);
     _storage.saveMessage(message);
@@ -253,9 +251,10 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 
   /// 删除消息
   Future<void> deleteMessage(String messageId) async {
-    final updatedMessages = state.messages.where((m) => m.id != messageId).toList();
+    final updatedMessages =
+        state.messages.where((m) => m.id != messageId).toList();
     state = state.copyWith(messages: updatedMessages);
-    
+
     await _storage.deleteMessage(messageId);
   }
 
@@ -282,7 +281,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
       'total': state.messages.length,
       'user': state.messages.where((m) => m.isUser).length,
       'ai': state.messages.where((m) => !m.isUser).length,
-      'failed': state.messages.where((m) => m.status == MessageStatus.failed).length,
+      'failed':
+          state.messages.where((m) => m.status == MessageStatus.failed).length,
       'isStreaming': state.isStreaming,
     };
   }
@@ -296,7 +296,8 @@ class MessagesNotifier extends StateNotifier<MessagesState> {
 }
 
 /// 消息 Provider
-final messagesProvider = StateNotifierProvider<MessagesNotifier, MessagesState>((ref) {
+final messagesProvider =
+    StateNotifierProvider<MessagesNotifier, MessagesState>((ref) {
   final wsService = ref.watch(webSocketServiceProvider);
   final storage = ref.watch(storageServiceProvider);
   return MessagesNotifier(wsService, storage, ref);
@@ -306,13 +307,13 @@ final messagesProvider = StateNotifierProvider<MessagesNotifier, MessagesState>(
 extension MessagesProviderExtension on WidgetRef {
   /// 获取所有消息
   List<Message> get messages => read(messagesProvider).messages;
-  
+
   /// 是否有消息
   bool get hasMessages => read(messagesProvider).hasMessages;
-  
+
   /// 是否正在接收流式消息
   bool get isStreaming => read(messagesProvider).isStreaming;
-  
+
   /// 当前流式消息
   Message? get streamingMessage => read(messagesProvider).streamingMessage;
 }

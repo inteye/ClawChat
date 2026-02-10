@@ -1,6 +1,6 @@
 /// 消息输入框组件
-/// 
-/// 底部消息输入框，支持多行输入和发送
+///
+/// 底部消息输入框，支持多行输入（最多3行）和发送按钮在右下角
 library;
 
 import 'package:flutter/material.dart';
@@ -71,58 +71,67 @@ class _MessageInputState extends State<MessageInput> {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // 输入框
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(
-                    maxHeight: 120,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 输入框
+                Expanded(
                   child: TextField(
                     controller: _controller,
                     focusNode: _focusNode,
                     enabled: widget.enabled,
-                    maxLines: null,
+                    maxLines: 3,
+                    minLines: 1,
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       hintText: widget.enabled ? '输入消息...' : '未连接',
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
+                      contentPadding: const EdgeInsets.only(
+                        left: 20,
+                        right: 12,
+                        top: 12,
+                        bottom: 12,
                       ),
                     ),
-                    onSubmitted: (_) => _handleSend(),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
 
-              // 发送按钮
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                child: FloatingActionButton(
-                  onPressed: _hasText && widget.enabled ? _handleSend : null,
-                  mini: true,
-                  backgroundColor: _hasText && widget.enabled
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.surfaceVariant,
-                  elevation: _hasText && widget.enabled ? 2 : 0,
-                  child: Icon(
-                    Icons.send,
-                    color: _hasText && widget.enabled
-                        ? theme.colorScheme.onPrimary
-                        : theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                // 发送按钮（在右下角）
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, bottom: 8),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    child: InkWell(
+                      onTap: _hasText && widget.enabled ? _handleSend : null,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _hasText && widget.enabled
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.surfaceVariant,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.send,
+                          size: 20,
+                          color: _hasText && widget.enabled
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurfaceVariant
+                                  .withOpacity(0.5),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

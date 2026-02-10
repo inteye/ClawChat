@@ -1,10 +1,11 @@
 /// 消息气泡组件
-/// 
+///
 /// 显示单条消息的气泡样式
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/message.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -29,7 +30,8 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // AI 头像
@@ -43,7 +45,8 @@ class MessageBubble extends StatelessWidget {
             child: GestureDetector(
               onLongPress: () => _showMessageMenu(context),
               child: Column(
-                crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   // 消息气泡
                   Container(
@@ -65,16 +68,73 @@ class MessageBubble extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 消息内容
-                        Text(
-                          message.content,
-                          style: TextStyle(
-                            color: isUser
-                                ? theme.colorScheme.onPrimary
-                                : theme.colorScheme.onSurfaceVariant,
-                            fontSize: 15,
+                        // 消息内容 - 使用 Markdown 渲染
+                        if (isUser)
+                          // 用户消息使用普通文本
+                          Text(
+                            message.content,
+                            style: TextStyle(
+                              color: theme.colorScheme.onPrimary,
+                              fontSize: 15,
+                            ),
+                          )
+                        else
+                          // AI 消息使用 Markdown 渲染
+                          MarkdownBody(
+                            data: message.content,
+                            selectable: true,
+                            styleSheet: MarkdownStyleSheet(
+                              p: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontSize: 15,
+                              ),
+                              code: TextStyle(
+                                backgroundColor: theme.colorScheme.surface,
+                                color: theme.colorScheme.onSurface,
+                                fontFamily: 'monospace',
+                                fontSize: 14,
+                              ),
+                              codeblockDecoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              blockquote: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant
+                                    .withOpacity(0.8),
+                                fontStyle: FontStyle.italic,
+                              ),
+                              blockquoteDecoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: theme.colorScheme.primary,
+                                    width: 4,
+                                  ),
+                                ),
+                              ),
+                              h1: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              h2: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              h3: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              listBullet: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              a: TextStyle(
+                                color: theme.colorScheme.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
-                        ),
 
                         // 流式动画指示器
                         if (isStreaming) ...[
@@ -135,9 +195,8 @@ class MessageBubble extends StatelessWidget {
   Widget _buildAvatar(ThemeData theme, bool isUser) {
     return CircleAvatar(
       radius: 18,
-      backgroundColor: isUser
-          ? theme.colorScheme.primary
-          : theme.colorScheme.secondary,
+      backgroundColor:
+          isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
       child: Icon(
         isUser ? Icons.person : Icons.smart_toy,
         size: 20,
@@ -172,6 +231,8 @@ class MessageBubble extends StatelessWidget {
           size: 14,
           color: theme.colorScheme.error,
         );
+      case MessageStatus.received:
+        return const SizedBox.shrink(); // No status icon for received messages
     }
   }
 
@@ -184,7 +245,7 @@ class MessageBubble extends StatelessWidget {
         final delay = index * 0.2;
         final animValue = (value + delay) % 1.0;
         final opacity = (animValue < 0.5 ? animValue * 2 : (1 - animValue) * 2);
-        
+
         return Opacity(
           opacity: opacity,
           child: Container(

@@ -1,5 +1,5 @@
 /// 常量定义
-/// 
+///
 /// 应用中使用的所有常量
 library;
 
@@ -28,6 +28,7 @@ class AppConstants {
   /// 本地存储 Box 名称
   static const String configBoxName = 'config';
   static const String messagesBoxName = 'messages';
+  static const String servicesBoxName = 'services';
 
   /// 加密密钥（实际使用时应该从安全存储获取）
   static const String encryptionKey = 'clawchat_secure_key_2024';
@@ -38,6 +39,9 @@ class ProtocolConstants {
   ProtocolConstants._();
 
   /// 消息类型
+  static const String typeRequest = 'req';
+  static const String typeResponse = 'res';
+  static const String typeEvent = 'event';
   static const String typeMessageSend = 'message.send';
   static const String typeAgentProcess = 'agent.process';
   static const String typeResponseChunk = 'response.chunk';
@@ -49,6 +53,12 @@ class ProtocolConstants {
   static const String typeAuth = 'auth';
   static const String typeAuthSuccess = 'auth.success';
   static const String typeAuthFailed = 'auth.failed';
+
+  /// 事件类型
+  static const String eventConnectChallenge = 'connect.challenge';
+
+  /// 请求方法
+  static const String methodConnect = 'connect';
 
   /// 认证模式
   static const String authModePassword = 'password';

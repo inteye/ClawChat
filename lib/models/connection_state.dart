@@ -1,5 +1,5 @@
 /// 连接状态模型
-/// 
+///
 /// 表示 WebSocket 连接的当前状态
 library;
 
@@ -7,16 +7,22 @@ library;
 enum ConnectionStatus {
   /// 未连接
   disconnected,
+
   /// 连接中
   connecting,
+
   /// 已连接
   connected,
+
   /// 认证中
   authenticating,
+
   /// 已认证
   authenticated,
+
   /// 重连中
   reconnecting,
+
   /// 连接错误
   error,
 }
@@ -96,6 +102,15 @@ class ConnectionState {
   bool get isConnected =>
       status == ConnectionStatus.connected ||
       status == ConnectionStatus.authenticated;
+
+  /// 是否已断开
+  bool get isDisconnected => status == ConnectionStatus.disconnected;
+
+  /// 是否正在连接
+  bool get isConnecting => status == ConnectionStatus.connecting;
+
+  /// 是否有错误
+  bool get hasError => status == ConnectionStatus.error || error != null;
 
   /// 是否可以发送消息
   bool get canSendMessage => isConnected && !isTyping;

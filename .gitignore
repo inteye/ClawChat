@@ -16,10 +16,8 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -31,6 +29,13 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+.metadata
+
+# Generated files
+*.g.dart
+*.freezed.dart
+*.gr.dart
+pubspec.lock
 
 # Symbolication related
 app.*.symbols
@@ -38,42 +43,61 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# iOS related
-**/ios/**/*.mode1v3
-**/ios/**/*.mode2v3
-**/ios/**/*.moved-aside
-**/ios/**/*.pbxuser
-**/ios/**/*.perspectivev3
-**/ios/**/*sync/
-**/ios/**/.sconsign.dblite
-**/ios/**/.tags*
-**/ios/**/.vagrant/
-**/ios/**/DerivedData/
-**/ios/**/Icon?
-**/ios/**/Pods/
-**/ios/**/.symlinks/
-**/ios/**/profile
-**/ios/**/xcuserdata
-**/ios/.generated/
-**/ios/Flutter/App.framework
-**/ios/Flutter/Flutter.framework
-**/ios/Flutter/Flutter.podspec
-**/ios/Flutter/Generated.xcconfig
-**/ios/Flutter/ephemeral/
-**/ios/Flutter/app.flx
-**/ios/Flutter/app.zip
-**/ios/Flutter/flutter_assets/
-**/ios/Flutter/flutter_export_environment.sh
-**/ios/ServiceDefinitions.json
-**/ios/Runner/GeneratedPluginRegistrant.*
-
 # Coverage
 coverage/
 
-# Exceptions to above rules.
+# ==================== Platform-specific files ====================
+# 用户应该根据自己的需求生成这些文件
+
+# Android
+android/
+!android/.gitkeep
+
+# iOS
+ios/
+!ios/.gitkeep
+
+# macOS
+macos/
+!macos/.gitkeep
+
+# Linux
+linux/
+!linux/.gitkeep
+
+# Windows
+windows/
+!windows/.gitkeep
+
+# Web
+web/
+!web/.gitkeep
+
+# ==================== Assets ====================
+# 图标和资源文件（用户自己生成）
+# 保留 assets 目录结构，但忽略具体文件
+assets/*
+!assets/.gitkeep
+
+# ==================== Local development ====================
+# 本地配置和测试文件
+*.local
+.env
+.env.local
+
+# Hive 数据库文件
+*.hive
+*.lock
+
+# 测试覆盖率
+test/.test_coverage.dart
+test/coverage/
+
+# ==================== Documentation ====================
+# 保留核心文档，忽略生成的文档
+docs/api/
+
+# ==================== Exceptions ====================
+# 保留必要的配置文件示例
+!.gitkeep
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages

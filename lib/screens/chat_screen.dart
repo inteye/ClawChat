@@ -1,16 +1,15 @@
 /// 聊天页
-/// 
+///
 /// 主聊天界面，显示消息列表和输入框
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/connection_provider.dart';
-import '../providers/messages_provider.dart';
-import '../providers/config_provider.dart';
-import '../models/connection_state.dart';
+import '../providers/chat_session_provider.dart';
+import '../providers/service_manager_provider.dart';
 import '../models/message.dart';
 import 'settings_screen.dart';
+import 'service_list_screen.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_input.dart';
 import '../widgets/connection_indicator.dart';
@@ -29,16 +28,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _connectIfNeeded();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _connectIfNeeded();
+      // 初始加载后滚动到底部
+      _scrollToBottom();
+    });
   }
 
   /// 如果需要则自动连接
   Future<void> _connectIfNeeded() async {
     if (!_autoConnect) return;
 
-    final connectionState = ref.read(connectionProvider);
-    if (connectionState.isDisconnected) {
-      await ref.read(connectionProvider.notifier).connect();
+    final serviceManager = ref.read(serviceManagerProvider);
+    if (!serviceManager.hasActiveService) return;
+
+    final activeServiceId = serviceManager.activeServiceId!;
+    final session = ref.read(chatSessionProvider(activeServiceId));
+
+    if (!session.isConnected) {
+      await ref.read(chatSessionProvider(activeServiceId).notifier).connect();
     }
   }
 
@@ -55,8 +63,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// 发送消息
   Future<void> _sendMessage(String content) async {
-    final success = await ref.read(messagesProvider.notifier).sendMessage(content);
-    
+    final serviceManager = ref.read(serviceManagerProvider);
+    if (!serviceManager.hasActiveService) return;
+
+    final activeServiceId = serviceManager.activeServiceId!;
+    final success = await ref
+        .read(chatSessionProvider(activeServiceId).notifier)
+        .sendMessage(content);
+
     if (success) {
       // 滚动到底部
       Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
@@ -65,7 +79,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// 重新发送消息
   Future<void> _resendMessage(String messageId) async {
-    await ref.read(messagesProvider.notifier).resendMessage(messageId);
+    final serviceManager = ref.read(serviceManagerProvider);
+    if (!serviceManager.hasActiveService) return;
+
+    final activeServiceId = serviceManager.activeServiceId!;
+    await ref
+        .read(chatSessionProvider(activeServiceId).notifier)
+        .resendMessage(messageId);
   }
 
   /// 删除消息
@@ -80,8 +100,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('取消'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('删除'),
           ),
         ],
@@ -89,7 +112,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     if (confirmed == true) {
-      await ref.read(messagesProvider.notifier).deleteMessage(messageId);
+      final serviceManager = ref.read(serviceManagerProvider);
+      if (!serviceManager.hasActiveService) return;
+
+      final activeServiceId = serviceManager.activeServiceId!;
+      await ref
+          .read(chatSessionProvider(activeServiceId).notifier)
+          .deleteMessage(messageId);
     }
   }
 
@@ -105,9 +134,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('取消'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('清空'),
           ),
         ],
@@ -115,8 +146,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     if (confirmed == true) {
-      await ref.read(messagesProvider.notifier).clearAllMessages();
+      final serviceManager = ref.read(serviceManagerProvider);
+      if (!serviceManager.hasActiveService) return;
+
+      final activeServiceId = serviceManager.activeServiceId!;
+      await ref
+          .read(chatSessionProvider(activeServiceId).notifier)
+          .clearAllMessages();
     }
+  }
+
+  /// 显示服务列表
+  void _showServiceList() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const ServiceListScreen(),
+      ),
+    );
+  }
+
+  /// 显示设置页面
+  void _showSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const SettingsScreen(),
+      ),
+    );
   }
 
   /// 显示菜单
@@ -129,14 +184,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.settings),
-              title: const Text('连接设置'),
+              title: const Text('设置'),
               onTap: () {
                 Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                );
+                _showSettings();
               },
             ),
             ListTile(
@@ -167,21 +218,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       applicationName: 'ClawChat',
       applicationVersion: '0.1.0',
-      applicationIcon: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Icon(
-          Icons.chat_bubble_outline,
-          color: Colors.white,
-          size: 32,
+      applicationIcon: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'assets/logo.png',
+          width: 64,
+          height: 64,
         ),
       ),
       children: [
-        const Text('OpenClaw 直连客户端'),
+        const Text('OpenClaw 多服务客户端'),
         const SizedBox(height: 8),
         const Text('一个简洁、高效的 AI 聊天应用'),
       ],
@@ -196,42 +242,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final connectionState = ref.watch(connectionProvider);
-    final messagesState = ref.watch(messagesProvider);
+    final serviceManager = ref.watch(serviceManagerProvider);
+
+    // 如果没有激活的服务，显示提示
+    if (!serviceManager.hasActiveService) {
+      return _buildNoServiceState(context);
+    }
+
+    final activeServiceId = serviceManager.activeServiceId!;
+    final session = ref.watch(chatSessionProvider(activeServiceId));
     final theme = Theme.of(context);
 
     // 监听消息变化，自动滚动
-    ref.listen<MessagesState>(messagesProvider, (previous, next) {
-      if (next.messages.length > (previous?.messages.length ?? 0)) {
-        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
-      }
-    });
+    ref.listen<ChatSessionState>(
+      chatSessionProvider(activeServiceId),
+      (previous, next) {
+        if (next.messages.length > (previous?.messages.length ?? 0)) {
+          Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+        }
+      },
+    );
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: _showServiceList,
+          tooltip: '服务列表',
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('ClawChat'),
-            ConnectionIndicator(status: connectionState.status),
+            Text(session.serviceConfig.name),
+            ConnectionIndicator(status: session.connectionState.status),
           ],
         ),
         actions: [
           // 连接/断开按钮
           IconButton(
             icon: Icon(
-              connectionState.isConnected
-                  ? Icons.cloud_done
-                  : Icons.cloud_off,
+              session.isConnected ? Icons.cloud_done : Icons.cloud_off,
             ),
             onPressed: () async {
-              if (connectionState.isConnected) {
-                await ref.read(connectionProvider.notifier).disconnect();
+              if (session.isConnected) {
+                await ref
+                    .read(chatSessionProvider(activeServiceId).notifier)
+                    .disconnect();
               } else {
-                await ref.read(connectionProvider.notifier).connect();
+                await ref
+                    .read(chatSessionProvider(activeServiceId).notifier)
+                    .connect();
               }
             },
-            tooltip: connectionState.isConnected ? '断开连接' : '连接',
+            tooltip: session.isConnected ? '断开连接' : '连接',
           ),
           // 菜单按钮
           IconButton(
@@ -243,7 +306,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           // 错误提示
-          if (connectionState.hasError)
+          if (session.connectionState.hasError)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -254,14 +317,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      connectionState.error!,
+                      session.connectionState.error!,
                       style: TextStyle(color: Colors.red.shade900),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () {
-                      ref.read(connectionProvider.notifier).clearError();
+                      ref
+                          .read(chatSessionProvider(activeServiceId).notifier)
+                          .clearError();
                     },
                   ),
                 ],
@@ -270,17 +335,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           // 消息列表
           Expanded(
-            child: messagesState.messages.isEmpty && !messagesState.isStreaming
+            child: session.messages.isEmpty && !session.isStreaming
                 ? _buildEmptyState(theme)
-                : _buildMessageList(messagesState),
+                : _buildMessageList(session),
           ),
 
           // 输入框
           MessageInput(
             onSend: _sendMessage,
-            enabled: connectionState.isConnected,
+            enabled: session.isConnected,
           ),
         ],
+      ),
+    );
+  }
+
+  /// 构建无服务状态
+  Widget _buildNoServiceState(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('ClawChat'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _showSettings,
+          ),
+        ],
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off,
+              size: 80,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '请先选择一个服务',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '点击下方按钮查看服务列表',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _showServiceList,
+              icon: const Icon(Icons.list),
+              label: const Text('服务列表'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -316,16 +426,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   /// 构建消息列表
-  Widget _buildMessageList(MessagesState state) {
+  Widget _buildMessageList(ChatSessionState session) {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: state.messages.length + (state.isStreaming ? 1 : 0),
+      itemCount: session.messages.length + (session.isStreaming ? 1 : 0),
       itemBuilder: (context, index) {
         // 流式消息
-        if (state.isStreaming && index == state.messages.length) {
+        if (session.isStreaming && index == session.messages.length) {
           return MessageBubble(
-            message: state.streamingMessage!,
+            message: session.streamingMessage!,
             onResend: null,
             onDelete: null,
             isStreaming: true,
@@ -333,7 +443,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         }
 
         // 普通消息
-        final message = state.messages[index];
+        final message = session.messages[index];
         return MessageBubble(
           message: message,
           onResend: message.status == MessageStatus.failed

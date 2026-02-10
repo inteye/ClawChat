@@ -24,16 +24,25 @@ dependencies:
   # 加密
   crypto: ^3.0.3
   
+  # 本地存储（设备 ID）
+  shared_preferences: ^2.2.2
+  
   # 国际化
   intl: ^0.18.1
   
   # UI
   cupertino_icons: ^1.0.6
+  
+  # Markdown 渲染
+  flutter_markdown: ^0.6.20
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  
+  # 测试
+  test: ^1.24.0
   
   # 代码生成
   build_runner: ^2.4.0
@@ -42,3 +51,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/logo.png

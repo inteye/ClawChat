@@ -1,9 +1,10 @@
 /// 验证器工具类
-/// 
+///
 /// 提供各种输入验证功能
 library;
 
 import '../utils/constants.dart';
+import '../utils/connection_diagnostics.dart';
 
 /// 验证器类
 class Validators {
@@ -15,27 +16,33 @@ class Validators {
       return ErrorMessages.invalidUrl;
     }
 
-    // 检查是否以 ws:// 或 wss:// 开头
-    if (!value.startsWith('ws://') && !value.startsWith('wss://')) {
-      return ErrorMessages.invalidUrl;
+    // 使用 ConnectionDiagnostics 进行详细验证
+    final error = ConnectionDiagnostics.validateUrl(value);
+    if (error != null) {
+      return error;
     }
 
-    // 强制使用 wss:// (安全连接)
-    if (!value.startsWith('wss://')) {
-      return ErrorMessages.urlMustBeSecure;
-    }
-
-    // 验证 URL 格式
-    try {
-      final uri = Uri.parse(value);
-      if (uri.host.isEmpty) {
-        return ErrorMessages.invalidUrl;
-      }
-    } catch (e) {
-      return ErrorMessages.invalidUrl;
-    }
+    // 可选：强制使用 wss:// (安全连接) - 注释掉以允许 ws://
+    // if (!value.startsWith('wss://')) {
+    //   return ErrorMessages.urlMustBeSecure;
+    // }
 
     return null;
+  }
+
+  /// 验证 WebSocket URL（宽松模式，允许 ws:// 和 wss://）
+  static String? validateWebSocketUrlPermissive(String? value) {
+    if (value == null || value.isEmpty) {
+      return ErrorMessages.invalidUrl;
+    }
+
+    // 使用 ConnectionDiagnostics 进行验证
+    return ConnectionDiagnostics.validateUrl(value);
+  }
+
+  /// 获取 URL 解析信息（用于调试）
+  static Map<String, dynamic> getUrlInfo(String url) {
+    return ConnectionDiagnostics.parseUrl(url);
   }
 
   /// 验证密码（可选）

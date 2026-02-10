@@ -1,12 +1,14 @@
 /// 本地存储服务
-/// 
+///
 /// 使用 Hive 管理本地数据存储
 library;
 
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/config.dart';
 import '../models/message.dart';
+import '../models/service_config.dart';
 import '../utils/constants.dart';
+import 'service_storage.dart';
 
 /// 存储服务（单例）
 class StorageService {
@@ -16,6 +18,7 @@ class StorageService {
 
   Box<Config>? _configBox;
   Box<Message>? _messagesBox;
+  Box<ServiceConfig>? _servicesBox;
   Box? _settingsBox;
 
   /// 初始化 Hive
@@ -29,6 +32,9 @@ class StorageService {
     if (!Hive.isAdapterRegistered(1)) {
       Hive.registerAdapter(ConfigAdapter());
     }
+    if (!Hive.isAdapterRegistered(2)) {
+      Hive.registerAdapter(ServiceConfigAdapter());
+    }
 
     // 打开 Box
     _configBox = await Hive.openBox<Config>(
@@ -40,6 +46,14 @@ class StorageService {
     _messagesBox = await Hive.openBox<Message>(
       AppConstants.messagesBoxName,
     );
+
+    _servicesBox = await Hive.openBox<ServiceConfig>(
+      AppConstants.servicesBoxName,
+    );
+    print('Services box 已打开');
+
+    // 初始化 ServiceStorage
+    ServiceStorage.initialize(_servicesBox!);
 
     _settingsBox = await Hive.openBox('settings');
 
@@ -130,10 +144,16 @@ class StorageService {
     if (sessionId == null) {
       return getAllMessages();
     }
-    
-    return _messagesBox?.values
-        .where((msg) => msg.sessionId == sessionId)
-        .toList() ?? [];
+
+    final messages = _messagesBox?.values
+            .where((msg) => msg.sessionId == sessionId)
+            .toList() ??
+        [];
+
+    // 按时间戳排序（从旧到新）
+    messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    return messages;
   }
 
   /// 获取最近的消息
@@ -164,7 +184,8 @@ class StorageService {
   }
 
   /// 更新消息状态
-  Future<void> updateMessageStatus(String messageId, MessageStatus status) async {
+  Future<void> updateMessageStatus(
+      String messageId, MessageStatus status) async {
     final message = _messagesBox?.get(messageId);
     if (message != null) {
       final updated = message.copyWith(status: status);
@@ -218,6 +239,7 @@ class StorageService {
   Future<void> compact() async {
     await _configBox?.compact();
     await _messagesBox?.compact();
+    await _servicesBox?.compact();
     print('数据库已压缩');
   }
 
@@ -225,6 +247,7 @@ class StorageService {
   Future<void> close() async {
     await _configBox?.close();
     await _messagesBox?.close();
+    await _servicesBox?.close();
     await _settingsBox?.close();
     print('存储服务已关闭');
   }

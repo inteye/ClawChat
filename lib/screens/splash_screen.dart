@@ -1,12 +1,11 @@
 /// 启动页
-/// 
+///
 /// 应用启动时的欢迎页面，检查配置并自动跳转
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/config_provider.dart';
-import '../providers/theme_provider.dart';
 import 'settings_screen.dart';
 import 'chat_screen.dart';
 
@@ -17,7 +16,7 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> 
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -88,7 +87,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void _navigateToSettings() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => const SettingsScreen(isFirstTime: true),
+        builder: (context) => const SettingsScreen(),
       ),
     );
   }
@@ -133,28 +132,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       // Logo
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.chat_bubble_outline,
-                          size: 60,
-                          color: theme.colorScheme.primary,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 30),
-                      
+
                       // 应用名称
                       Text(
                         'ClawChat',
@@ -166,7 +166,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 10),
-                      
+
                       // 副标题
                       Text(
                         'OpenClaw 直连客户端',
@@ -177,7 +177,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 50),
-                      
+
                       // 加载指示器
                       SizedBox(
                         width: 40,

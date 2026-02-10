@@ -1,21 +1,21 @@
 /// 设置页
-/// 
-/// Gateway 连接配置页面
+///
+/// 服务配置页面 - 添加/编辑服务
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/config_provider.dart';
-import '../providers/connection_provider.dart';
-import '../models/config.dart';
-import 'chat_screen.dart';
+import '../models/service_config.dart';
+import '../providers/service_manager_provider.dart';
+import '../utils/connection_diagnostics.dart';
+import '../utils/validators.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  final bool isFirstTime;
+  final ServiceConfig? editingService;
 
   const SettingsScreen({
     super.key,
-    this.isFirstTime = false,
+    this.editingService,
   });
 
   @override
@@ -24,15 +24,15 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _gatewayUrlController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _agentIdController = TextEditingController();
-  
-  bool _autoReconnect = true;
-  int _reconnectInterval = 5;
-  int _maxReconnectAttempts = 3;
-  bool _obscurePassword = true;
+  final _nameController = TextEditingController();
+  final _wsUrlController = TextEditingController();
+  final _tokenController = TextEditingController();
+
+  bool _obscureToken = true;
+  bool _isSaving = false;
   bool _isTesting = false;
+  Map<String, dynamic>? _urlInfo;
+  String? _testResult;
 
   @override
   void initState() {
@@ -42,22 +42,107 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   /// 加载配置
   void _loadConfig() {
-    final configState = ref.read(configProvider);
-    if (configState.config != null) {
-      final config = configState.config!;
-      _gatewayUrlController.text = config.gatewayUrl;
-      _passwordController.text = config.password ?? '';
-      _agentIdController.text = config.agentId ?? '';
-      _autoReconnect = config.autoReconnect;
-      _reconnectInterval = config.reconnectInterval;
-      _maxReconnectAttempts = config.maxReconnectAttempts;
+    if (widget.editingService != null) {
+      final service = widget.editingService!;
+      _nameController.text = service.name;
+      _wsUrlController.text = service.wsUrl;
+      _tokenController.text = service.token;
+      _updateUrlInfo();
+    }
+  }
+
+  /// 更新 URL 信息
+  void _updateUrlInfo() {
+    final url = _wsUrlController.text.trim();
+    if (url.isNotEmpty) {
+      setState(() {
+        _urlInfo = Validators.getUrlInfo(url);
+      });
     } else {
-      // 设置默认值
-      final defaultConfig = Config.defaultConfig();
-      _gatewayUrlController.text = defaultConfig.gatewayUrl;
-      _autoReconnect = defaultConfig.autoReconnect;
-      _reconnectInterval = defaultConfig.reconnectInterval;
-      _maxReconnectAttempts = defaultConfig.maxReconnectAttempts;
+      setState(() {
+        _urlInfo = null;
+      });
+    }
+  }
+
+  /// 测试连接
+  Future<void> _testConnection() async {
+    final url = _wsUrlController.text.trim();
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请先输入 WebSocket URL'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // 验证 URL 格式
+    final urlError = ConnectionDiagnostics.validateUrl(url);
+    if (urlError != null) {
+      setState(() {
+        _testResult = '❌ $urlError';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(urlError),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isTesting = true;
+      _testResult = null;
+    });
+
+    try {
+      // 显示 URL 解析信息
+      final parsed = ConnectionDiagnostics.parseUrl(url);
+      final buffer = StringBuffer();
+      buffer.writeln('✅ URL 格式正确');
+      buffer.writeln('协议: ${parsed['scheme']}');
+      buffer.writeln('主机: ${parsed['host']}');
+      buffer.writeln('端口: ${parsed['port']}');
+      buffer.writeln('路径: ${parsed['path']}');
+      if (parsed['hasToken'] == true) {
+        buffer.writeln('包含 Token: 是');
+      }
+
+      setState(() {
+        _testResult = buffer.toString();
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('URL 格式验证通过\n提示：实际连接测试需要在聊天页面进行'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _testResult = '❌ 验证失败: $e';
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('验证失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTesting = false;
+        });
+      }
     }
   }
 
@@ -67,132 +152,145 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
 
-    final config = Config(
-      gatewayUrl: _gatewayUrlController.text.trim(),
-      password: _passwordController.text.isEmpty ? null : _passwordController.text,
-      agentId: _agentIdController.text.isEmpty ? null : _agentIdController.text,
-      autoReconnect: _autoReconnect,
-      reconnectInterval: _reconnectInterval,
-      maxReconnectAttempts: _maxReconnectAttempts,
-    );
+    setState(() => _isSaving = true);
 
-    final success = await ref.read(configProvider.notifier).saveConfig();
+    try {
+      final serviceManager = ref.read(serviceManagerProvider.notifier);
 
-    if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('配置保存成功'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // 如果是首次配置，跳转到聊天页
-      if (widget.isFirstTime) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const ChatScreen(),
-          ),
+      if (widget.editingService != null) {
+        // 更新现有服务
+        final updatedService = widget.editingService!.copyWith(
+          name: _nameController.text.trim(),
+          wsUrl: _wsUrlController.text.trim(),
+          token: _tokenController.text.trim(),
         );
+
+        final success = await serviceManager.updateService(updatedService);
+
+        if (!mounted) return;
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('服务更新成功'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop();
+        } else {
+          final error = ref.read(serviceManagerProvider).error ?? '更新失败';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        // 添加新服务
+        final newService = ServiceConfig.create(
+          name: _nameController.text.trim(),
+          wsUrl: _wsUrlController.text.trim(),
+          token: _tokenController.text.trim(),
+        );
+
+        final success = await serviceManager.addService(newService);
+
+        if (!mounted) return;
+
+        if (success) {
+          // 如果是第一个服务，自动设置为激活
+          final services = ref.read(serviceManagerProvider).services;
+          if (services.length == 1) {
+            await serviceManager.setActiveService(newService.id);
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('服务添加成功'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop();
+        } else {
+          final error = ref.read(serviceManagerProvider).error ?? '添加失败';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
-    } else {
-      final error = ref.read(configProvider).error ?? '保存失败';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  /// 测试连接
-  Future<void> _testConnection() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() => _isTesting = true);
-
-    // 先保存配置
-    final config = Config(
-      gatewayUrl: _gatewayUrlController.text.trim(),
-      password: _passwordController.text.isEmpty ? null : _passwordController.text,
-      agentId: _agentIdController.text.isEmpty ? null : _agentIdController.text,
-      autoReconnect: _autoReconnect,
-      reconnectInterval: _reconnectInterval,
-      maxReconnectAttempts: _maxReconnectAttempts,
-    );
-
-    ref.read(configProvider.notifier).updateConfig(config);
-
-    // 测试连接
-    final success = await ref.read(connectionProvider.notifier).connect();
-
-    if (!mounted) return;
-
-    setState(() => _isTesting = false);
-
-    if (success) {
-      // 断开测试连接
-      await ref.read(connectionProvider.notifier).disconnect();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('连接测试成功！'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      final error = ref.read(connectionProvider).error ?? '连接失败';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('连接测试失败: $error'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
   @override
   void dispose() {
-    _gatewayUrlController.dispose();
-    _passwordController.dispose();
-    _agentIdController.dispose();
+    _nameController.dispose();
+    _wsUrlController.dispose();
+    _tokenController.dispose();
     super.dispose();
+  }
+
+  /// 构建信息行
+  Widget _buildInfoRow(String label, String value, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w500,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final configState = ref.watch(configProvider);
+    final isEditing = widget.editingService != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('连接设置'),
-        leading: widget.isFirstTime
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
+        title: Text(isEditing ? '编辑服务' : '添加服务'),
+        centerTitle: true,
       ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 标题
-            if (widget.isFirstTime) ...[
+            // 标题说明
+            if (!isEditing) ...[
               Icon(
-                Icons.settings_outlined,
+                Icons.cloud_outlined,
                 size: 64,
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 16),
               Text(
-                '欢迎使用 ClawChat',
+                '添加 OpenClaw 服务',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -200,7 +298,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '请配置 Gateway 连接信息',
+                '请填写服务连接信息',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.6),
                 ),
@@ -209,7 +307,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const SizedBox(height: 32),
             ],
 
-            // Gateway URL
+            // 服务配置表单
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -217,165 +315,249 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '基本设置',
+                      '服务信息',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // 服务名称
                     TextFormField(
-                      controller: _gatewayUrlController,
+                      controller: _nameController,
                       decoration: const InputDecoration(
-                        labelText: 'Gateway URL',
-                        hintText: 'wss://gateway.example.com',
+                        labelText: '服务名称',
+                        hintText: '例如：我的 OpenClaw',
+                        prefixIcon: Icon(Icons.label_outline),
+                        helperText: '用于识别不同的服务',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return '请输入服务名称';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // WebSocket URL
+                    TextFormField(
+                      controller: _wsUrlController,
+                      decoration: const InputDecoration(
+                        labelText: 'WebSocket URL',
+                        hintText: 'https://your-machine.tailnet.ts.net',
                         prefixIcon: Icon(Icons.link),
-                        helperText: '以 ws:// 或 wss:// 开头',
+                        helperText:
+                            'Tailscale: https://machine.tailnet.ts.net\n'
+                            'Tailnet IP: ws://100.x.x.x:18789\n'
+                            '注意：不要在 URL 中包含 token 参数',
+                        helperMaxLines: 3,
                       ),
                       keyboardType: TextInputType.url,
+                      onChanged: (value) => _updateUrlInfo(),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return '请输入 Gateway URL';
+                        if (value == null || value.trim().isEmpty) {
+                          return '请输入 WebSocket URL';
                         }
-                        if (!value.startsWith('ws://') && !value.startsWith('wss://')) {
-                          return 'URL 必须以 ws:// 或 wss:// 开头';
+                        final trimmed = value.trim();
+                        if (!trimmed.startsWith('ws://') &&
+                            !trimmed.startsWith('wss://') &&
+                            !trimmed.startsWith('http://') &&
+                            !trimmed.startsWith('https://')) {
+                          return 'URL 必须以 ws://, wss://, http:// 或 https:// 开头';
                         }
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(
-                        labelText: '密码（可选）',
-                        hintText: '如果 Gateway 需要密码',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
-                          },
-                        ),
-                      ),
-                      obscureText: _obscurePassword,
-                      validator: (value) {
-                        if (value != null && value.isNotEmpty && value.length < 6) {
-                          return '密码长度至少 6 个字符';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _agentIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'Agent ID（可选）',
-                        hintText: '指定特定的 Agent',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
 
-            // 高级设置
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '高级设置',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text('自动重连'),
-                      subtitle: const Text('连接断开时自动尝试重连'),
-                      value: _autoReconnect,
-                      onChanged: (value) {
-                        setState(() => _autoReconnect = value);
-                      },
-                    ),
-                    if (_autoReconnect) ...[
-                      ListTile(
-                        title: const Text('重连间隔'),
-                        subtitle: Text('$_reconnectInterval 秒'),
-                        trailing: SizedBox(
-                          width: 200,
-                          child: Slider(
-                            value: _reconnectInterval.toDouble(),
-                            min: 1,
-                            max: 30,
-                            divisions: 29,
-                            label: '$_reconnectInterval 秒',
-                            onChanged: (value) {
-                              setState(() => _reconnectInterval = value.toInt());
-                            },
+                    // URL 解析信息
+                    if (_urlInfo != null && _urlInfo!['valid'] == true) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color:
+                              theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withOpacity(0.3),
                           ),
                         ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 16,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'URL 解析信息',
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _buildInfoRow('协议', _urlInfo!['scheme'], theme),
+                            _buildInfoRow('主机', _urlInfo!['host'], theme),
+                            _buildInfoRow(
+                                '端口', _urlInfo!['port'].toString(), theme),
+                            _buildInfoRow('路径', _urlInfo!['path'], theme),
+                            _buildInfoRow(
+                              '安全连接',
+                              _urlInfo!['isSecure'] ? '是 (wss)' : '否 (ws)',
+                              theme,
+                            ),
+                            _buildInfoRow(
+                              '包含 Token',
+                              _urlInfo!['hasToken'] ? '是' : '否',
+                              theme,
+                            ),
+                          ],
+                        ),
                       ),
-                      ListTile(
-                        title: const Text('最大重连次数'),
-                        subtitle: Text(_maxReconnectAttempts == 0 ? '无限制' : '$_maxReconnectAttempts 次'),
-                        trailing: SizedBox(
-                          width: 200,
-                          child: Slider(
-                            value: _maxReconnectAttempts.toDouble(),
-                            min: 0,
-                            max: 10,
-                            divisions: 10,
-                            label: _maxReconnectAttempts == 0 ? '无限制' : '$_maxReconnectAttempts 次',
-                            onChanged: (value) {
-                              setState(() => _maxReconnectAttempts = value.toInt());
-                            },
+                    ],
+
+                    // 测试连接按钮
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _isTesting ? null : _testConnection,
+                        icon: _isTesting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.wifi_find),
+                        label: Text(_isTesting ? '验证中...' : '验证 URL 格式'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+
+                    // 测试结果
+                    if (_testResult != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _testResult!.startsWith('✅')
+                              ? Colors.green.withOpacity(0.1)
+                              : Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _testResult!.startsWith('✅')
+                                ? Colors.green
+                                : Colors.red,
+                          ),
+                        ),
+                        child: Text(
+                          _testResult!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFamily: 'monospace',
                           ),
                         ),
                       ),
                     ],
+
+                    const SizedBox(height: 16),
+
+                    // Token
+                    TextFormField(
+                      controller: _tokenController,
+                      decoration: InputDecoration(
+                        labelText: 'Token/Password',
+                        hintText: '认证凭证',
+                        prefixIcon: const Icon(Icons.vpn_key),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureToken
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() => _obscureToken = !_obscureToken);
+                          },
+                        ),
+                        helperText: '用于 challenge-response 认证\n'
+                            '服务器会发送 challenge，客户端用 token 签名响应\n'
+                            'Tailscale Serve 可选，Funnel 必填',
+                        helperMaxLines: 3,
+                      ),
+                      obscureText: _obscureToken,
+                      validator: (value) {
+                        // Token 是必需的（用于 challenge-response 认证）
+                        if (value == null || value.trim().isEmpty) {
+                          return '请输入认证 Token（用于签名 challenge）';
+                        }
+                        return null;
+                      },
+                    ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // 按钮
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isTesting || configState.isLoading ? null : _testConnection,
-                    icon: _isTesting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.wifi_find),
-                    label: Text(_isTesting ? '测试中...' : '测试连接'),
-                  ),
+            // 提示信息
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.3),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: configState.isLoading ? null : _saveConfig,
-                    icon: configState.isLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(configState.isLoading ? '保存中...' : '保存配置'),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: theme.colorScheme.primary,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '服务配置保存后，您可以在服务列表中切换使用不同的服务。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 保存按钮
+            FilledButton.icon(
+              onPressed: _isSaving ? null : _saveConfig,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save),
+              label: Text(_isSaving ? '保存中...' : (isEditing ? '保存修改' : '添加服务')),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
             ),
           ],
         ),
