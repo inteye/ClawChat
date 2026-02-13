@@ -1,0 +1,59 @@
+name: 快速构建测试
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.19.0'
+
+jobs:
+  test:
+    name: 运行测试
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - run: flutter pub get
+      - run: flutter create . --platforms=android
+      - run: flutter pub run build_runner build --delete-conflicting-outputs
+      - run: flutter test
+      - run: flutter analyze
+
+  build-android-quick:
+    name: Android 快速构建
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - run: flutter pub get
+      - run: flutter create . --platforms=android
+      - run: flutter pub run build_runner build --delete-conflicting-outputs
+      - run: flutter build apk --debug
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: build/app/outputs/flutter-apk/*.apk

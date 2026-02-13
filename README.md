@@ -571,9 +571,9 @@ ClawChat 使用 OpenClaw Gateway 的 WebSocket 协议进行通信：
 
 ## 📞 联系方式
 
-- 项目主页: [https://github.com/inteye/ClawChat](https://github.com/inteye/ClawChat)
-- 问题反馈: [Issues](https://github.com/inteye/ClawChat/issues)
-- 讨论交流: [Discussions](https://github.com/inteye/ClawChat/discussions)
+- 项目主页: [https://github.com/inteye/clawchat](https://github.com/inteye/clawchat)
+- 问题反馈: [Issues](https://github.com/inteye/clawchat/issues)
+- 讨论交流: [Discussions](https://github.com/inteye/clawchat/discussions)
 
 ---
 

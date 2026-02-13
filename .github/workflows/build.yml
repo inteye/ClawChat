@@ -1,0 +1,287 @@
+name: 多平台构建和发布
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  FLUTTER_VERSION: '3.19.0'
+
+jobs:
+  # Android 构建
+  build-android:
+    name: 构建 Android APK/AAB
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Java 环境
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: 设置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 获取依赖
+        run: flutter pub get
+
+      - name: 生成平台文件
+        run: flutter create . --platforms=android
+
+      - name: 运行代码生成
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 构建 APK (Debug)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: flutter build apk --debug
+
+      - name: 构建 APK (Release)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: flutter build apk --release --split-per-abi
+
+      - name: 构建 AAB (Release)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: flutter build appbundle --release
+
+      - name: 上传 APK 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+
+      - name: 上传 AAB 构建产物
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: |
+            build/app/outputs/bundle/release/*.aab
+          retention-days: 30
+
+  # iOS 构建
+  build-ios:
+    name: 构建 iOS IPA
+    runs-on: macos-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 获取依赖
+        run: flutter pub get
+
+      - name: 生成平台文件
+        run: flutter create . --platforms=ios
+
+      - name: 运行代码生成
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 构建 iOS (无签名)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: 创建 IPA (仅用于测试)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r ClawChat-iOS-unsigned.ipa Payload
+          rm -rf Payload
+
+      - name: 上传 iOS 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: |
+            ClawChat-iOS-unsigned.ipa
+          retention-days: 30
+
+  # macOS 构建
+  build-macos:
+    name: 构建 macOS APP
+    runs-on: macos-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 获取依赖
+        run: flutter pub get
+
+      - name: 生成平台文件
+        run: flutter create . --platforms=macos
+
+      - name: 运行代码生成
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 构建 macOS
+        run: flutter build macos --release
+
+      - name: 打包 DMG
+        run: |
+          # 创建临时目录
+          mkdir -p dmg_temp
+          cp -r build/macos/Build/Products/Release/clawchat.app dmg_temp/
+          
+          # 创建 DMG
+          hdiutil create -volname "ClawChat" -srcfolder dmg_temp -ov -format UDZO ClawChat-macOS.dmg
+          
+          # 清理
+          rm -rf dmg_temp
+
+      - name: 上传 macOS 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: |
+            ClawChat-macOS.dmg
+          retention-days: 30
+
+  # Linux 构建
+  build-linux:
+    name: 构建 Linux
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: 设置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 获取依赖
+        run: flutter pub get
+
+      - name: 生成平台文件
+        run: flutter create . --platforms=linux
+
+      - name: 运行代码生成
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 构建 Linux
+        run: flutter build linux --release
+
+      - name: 打包 tar.gz
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czf ../../../../../ClawChat-Linux-x64.tar.gz *
+          cd -
+
+      - name: 上传 Linux 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-tar
+          path: |
+            ClawChat-Linux-x64.tar.gz
+          retention-days: 30
+
+  # Windows 构建
+  build-windows:
+    name: 构建 Windows
+    runs-on: windows-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Flutter 环境
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 获取依赖
+        run: flutter pub get
+
+      - name: 生成平台文件
+        run: flutter create . --platforms=windows
+
+      - name: 运行代码生成
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: 构建 Windows
+        run: flutter build windows --release
+
+      - name: 打包 ZIP
+        run: |
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ClawChat-Windows-x64.zip
+
+      - name: 上传 Windows 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: |
+            ClawChat-Windows-x64.zip
+          retention-days: 30
+
+  # 创建 GitHub Release (仅在打 tag 时)
+  create-release:
+    name: 创建 GitHub Release
+    needs: [build-android, build-ios, build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/android-apk/*.apk
+            artifacts/android-aab/*.aab
+            artifacts/macos-dmg/*.dmg
+            artifacts/linux-tar/*.tar.gz
+            artifacts/windows-zip/*.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
